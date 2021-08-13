@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
-	"log"
 	"math"
 	"math/big"
 )
@@ -27,10 +26,7 @@ func NewProofOfWork(b *Block) *ProofOfWork {
 
 func ToHex(num int64) []byte {
 	buff := new(bytes.Buffer)
-	err := binary.Write(buff, binary.BigEndian, num)
-	if err != nil {
-		log.Panic(err)
-	}
+	ErrorHandler(binary.Write(buff, binary.BigEndian, num))
 	return buff.Bytes()
 }
 

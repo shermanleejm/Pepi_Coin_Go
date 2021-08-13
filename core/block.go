@@ -1,6 +1,9 @@
 package core
 
-import ()
+import (
+	"bytes"
+	"encoding/gob"
+)
 
 type Block struct {
 	Hash     []byte
@@ -16,4 +19,22 @@ func CreateBlock(data string, prevHash []byte) *Block {
 	block.Hash = hash[:]
 	block.Nonce = nonce
 	return block
+}
+
+func (b *Block) Serialise() []byte {
+	var res bytes.Buffer
+	encoder := gob.NewEncoder(&res)
+
+	ErrorHandler(encoder.Encode(b))
+
+	return res.Bytes()
+}
+
+func Deserialise(data []byte) *Block {
+	var block Block
+	decoder := gob.NewDecoder(bytes.NewReader(data))
+
+	ErrorHandler(decoder.Decode(&block))
+
+	return &block
 }

@@ -3,11 +3,9 @@ package core
 import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/sha256"
 	"fmt"
-	// "encoding/json"
-	"crypto/rand"
-	"os"
 )
 
 type Transaction struct {
@@ -29,10 +27,7 @@ func signTransaction() {
 	privatekey := new(ecdsa.PrivateKey)
 	privatekey, err := ecdsa.GenerateKey(pubKeyCurve, rand.Reader)
 
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
+	ErrorHandler(err)
 
 	var pubkey ecdsa.PublicKey
 	pubkey = privatekey.PublicKey

@@ -1,19 +1,103 @@
 package core
 
+import (
+	"fmt"
+
+	"github.com/dgraph-io/badger"
+)
+
+const (
+	dbPath = "/tmp/blocks"
+)
+
 type BlockChain struct {
-	Blocks []*Block
+	LastHash []byte
+	Database *badger.DB
+}
+
+type BlockChainIterator struct {
+	CurrentHash []byte
+	Database    *badger.DB
 }
 
 func (chain *BlockChain) AddBlock(data string) {
-	prevBlock := chain.Blocks[len(chain.Blocks)-1]
-	newBlock := CreateBlock(data, prevBlock.Hash)
-	chain.Blocks = append(chain.Blocks, newBlock)
+	var lastHash []byte
+
+	err := chain.Database.View(func(txn *badger.Txn) error {
+		item, err := txn.Get([]byte("lastHash"))
+		ErrorHandler(err)
+		err = item.Value(func(val []byte) error {
+			lastHash = append([]byte{}, lastHash...)
+			return nil
+		})
+		return err
+	})
+	ErrorHandler(err)
+
+	newBlock := CreateBlock(data, lastHash)
+
+	err = chain.Database.Update(func(txn *badger.Txn) error {
+		err := txn.Set(newBlock.Hash, newBlock.Serialise())
+		ErrorHandler(err)
+		err = txn.Set([]byte("lastHash"), newBlock.Hash)
+
+		chain.LastHash = newBlock.Hash
+
+		return err
+	})
+	ErrorHandler(err)
 }
 
 func InitBlockChain() *BlockChain {
-	return &BlockChain{[]*Block{CreateBlock("Genesis", []byte{})}}
+	var lastHash []byte
+
+	opts := badger.DefaultOptions(dbPath)
+	db, err := badger.Open(opts)
+	ErrorHandler(err)
+
+	err = db.Update(func(txn *badger.Txn) error {
+		if _, err := txn.Get([]byte("lastHash")); err == badger.ErrKeyNotFound {
+			fmt.Println("No existing blockchain found")
+			genesis := CreateBlock("Genesis", []byte{})
+			fmt.Println("Genesis created")
+			ErrorHandler(txn.Set(genesis.Hash, genesis.Serialise()))
+			err = txn.Set([]byte("lastHash"), genesis.Hash)
+			lastHash = genesis.Hash
+			return err
+		} else {
+			item, err := txn.Get([]byte("lastHash"))
+			ErrorHandler(err)
+			lastHash = GetDBValue(*item)
+			return err
+		}
+	})
+
+	ErrorHandler(err)
+
+	blockchain := BlockChain{lastHash, db}
+	return &blockchain
 }
 
-func (bc *BlockChain) GetLatestBlock() *Block {
-	return bc.Blocks[len(bc.Blocks)-1]
+func (chain *BlockChain) Iterator() *BlockChainIterator {
+	iter := &BlockChainIterator{chain.LastHash, chain.Database}
+
+	return iter
+}
+
+func (iter *BlockChainIterator) Next() *Block {
+	var block *Block
+
+	err := iter.Database.View(func(txn *badger.Txn) error {
+		item, err := txn.Get(iter.CurrentHash)
+		ErrorHandler(err)
+		var encodedBlock []byte = GetDBValue(*item)
+		block = Deserialise(encodedBlock)
+
+		return err
+	})
+	ErrorHandler(err)
+
+	iter.CurrentHash = block.PrevHash
+
+	return block
 }
