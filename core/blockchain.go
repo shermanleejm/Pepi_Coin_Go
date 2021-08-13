@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	dbPath = "/tmp/blocks"
+	dbPath = "./tmp/blocks"
 )
 
 type BlockChain struct {
@@ -26,10 +26,7 @@ func (chain *BlockChain) AddBlock(data string) {
 	err := chain.Database.View(func(txn *badger.Txn) error {
 		item, err := txn.Get([]byte("lastHash"))
 		ErrorHandler(err)
-		err = item.Value(func(val []byte) error {
-			lastHash = append([]byte{}, lastHash...)
-			return nil
-		})
+		lastHash = GetDBValue(*item)
 		return err
 	})
 	ErrorHandler(err)
@@ -52,17 +49,23 @@ func InitBlockChain() *BlockChain {
 	var lastHash []byte
 
 	opts := badger.DefaultOptions(dbPath)
+	opts.Dir = dbPath
+	opts.ValueDir = dbPath
+	opts.Logger = nil
 	db, err := badger.Open(opts)
 	ErrorHandler(err)
 
 	err = db.Update(func(txn *badger.Txn) error {
 		if _, err := txn.Get([]byte("lastHash")); err == badger.ErrKeyNotFound {
 			fmt.Println("No existing blockchain found")
-			genesis := CreateBlock("Genesis", []byte{})
-			fmt.Println("Genesis created")
-			ErrorHandler(txn.Set(genesis.Hash, genesis.Serialise()))
+			genesis := Genesis()
+			fmt.Println("Genesis proved")
+			err = txn.Set(genesis.Hash, genesis.Serialise())
+			ErrorHandler(err)
 			err = txn.Set([]byte("lastHash"), genesis.Hash)
+
 			lastHash = genesis.Hash
+
 			return err
 		} else {
 			item, err := txn.Get([]byte("lastHash"))
@@ -71,7 +74,6 @@ func InitBlockChain() *BlockChain {
 			return err
 		}
 	})
-
 	ErrorHandler(err)
 
 	blockchain := BlockChain{lastHash, db}
@@ -90,9 +92,7 @@ func (iter *BlockChainIterator) Next() *Block {
 	err := iter.Database.View(func(txn *badger.Txn) error {
 		item, err := txn.Get(iter.CurrentHash)
 		ErrorHandler(err)
-		var encodedBlock []byte = GetDBValue(*item)
-		block = Deserialise(encodedBlock)
-
+		block = Deserialise(GetDBValue(*item))
 		return err
 	})
 	ErrorHandler(err)

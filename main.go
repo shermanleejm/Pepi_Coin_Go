@@ -81,6 +81,7 @@ func (cli *CommandLine) run() {
 }
 
 func main() {
+	defer os.Exit(0)
 	chain := core.InitBlockChain()
 	defer chain.Database.Close()
 

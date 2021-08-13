@@ -1,40 +1,56 @@
 package core
 
 import (
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
+	"bytes"
 	"crypto/sha256"
+	"encoding/gob"
 	"fmt"
 )
 
 type Transaction struct {
-	fromAddress string
-	toAddresss  string
-	signature   string
-	timestamp   int
-	amount      float64
+	ID      []byte
+	Inputs  []TxInput
+	Outputs []TxOutput
 }
 
-func getHash(o interface{}) string {
-	h := sha256.New()
-	h.Write([]byte(fmt.Sprintf("%v", o)))
-	return fmt.Sprintf("%x", h.Sum(nil))
+type TxOutput struct {
+	Value     int
+	PublicKey string
 }
 
-func signTransaction() {
-	pubKeyCurve := elliptic.P256()
-	privatekey := new(ecdsa.PrivateKey)
-	privatekey, err := ecdsa.GenerateKey(pubKeyCurve, rand.Reader)
+type TxInput struct {
+	ID          []byte
+	OutputIndex int
+	Signature   string
+}
 
+func (tx *Transaction) SetID() {
+	var encoded bytes.Buffer
+	var hash [32]byte
+
+	encode := gob.NewEncoder(&encoded)
+	err := encode.Encode(tx)
 	ErrorHandler(err)
 
-	var pubkey ecdsa.PublicKey
-	pubkey = privatekey.PublicKey
-
-	fmt.Println("Private Key :")
-	fmt.Printf("%x \n", privatekey)
-
-	fmt.Println("Public Key :")
-	fmt.Printf("%x \n", pubkey)
+	hash = sha256.Sum256(encoded.Bytes())
+	tx.ID = hash[:]
 }
+
+func CoinbaseTxn(to, data string) *Transaction {
+	if data == "" {
+		data = fmt.Sprintf("Paying %s", to)
+	}
+
+	txin := TxInput{[]byte{}, -1, data}
+	txout := TxOutput{69, to}
+
+	tx := Transaction{nil, []TxInput{txin}, []TxOutput{txout}}
+	tx.SetID()
+
+	return &tx
+}
+
+func (tx *Transaction) IsCoinbase() bool {
+	return len(tx.Inputs) == 1 && len(tx.Inputs[0].ID) == 0 && tx.Inputs[0].OutputIndex == -1
+}
+
