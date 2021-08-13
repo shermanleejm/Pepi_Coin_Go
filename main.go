@@ -1,9 +1,12 @@
 package main
 
 import (
-	"fmt"
+	"github.com/shermanleejm/pepi_coin/core"
 )
 
 func main() {
-	fmt.Println("Hello, world")
+	chain := core.InitBlockChain()
+	chain.AddBlock("Exodus")
+	chain.AddBlock("Leviticus")
+	chain.AddBlock("Numbers")
 }
