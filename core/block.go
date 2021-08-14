@@ -2,18 +2,19 @@ package core
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/gob"
 )
 
 type Block struct {
 	Hash     []byte
-	Data     []byte
+	Data     []*Transaction
 	PrevHash []byte
 	Nonce    int
 }
 
-func CreateBlock(data string, prevHash []byte) *Block {
-	block := &Block{[]byte{}, []byte(data), prevHash, 0}
+func CreateBlock(data []*Transaction, prevHash []byte) *Block {
+	block := &Block{[]byte{}, data, prevHash, 0}
 	pow := NewProofOfWork(block)
 	nonce, hash := pow.Calculate()
 	block.Hash = hash[:]
@@ -21,8 +22,20 @@ func CreateBlock(data string, prevHash []byte) *Block {
 	return block
 }
 
-func Genesis() *Block {
-	return CreateBlock("Genesis", []byte{})
+func Genesis(coinbase *Transaction) *Block {
+	return CreateBlock([]*Transaction{coinbase}, []byte{})
+}
+
+func (b *Block) HashTransactions() []byte {
+	var txHashes [][]byte
+	var txHash [32]byte
+
+	for _, tx := range b.Data {
+		txHashes = append(txHashes, tx.ID)
+	}
+	txHash = sha256.Sum256(bytes.Join(txHashes, []byte{}))
+
+	return txHash[:]
 }
 
 func (b *Block) Serialise() []byte {

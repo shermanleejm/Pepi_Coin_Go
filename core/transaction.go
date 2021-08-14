@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/gob"
+	"encoding/hex"
 	"fmt"
+	"log"
 )
 
 type Transaction struct {
@@ -22,6 +24,37 @@ type TxInput struct {
 	ID          []byte
 	OutputIndex int
 	Signature   string
+}
+
+func NewTransaction(from, to string, amount int, chain *BlockChain) *Transaction {
+	var inputs []TxInput
+	var outputs []TxOutput
+
+	accumulated, ValidOutputs := chain.FindSpendableOutputs(from, amount)
+
+	if accumulated < amount {
+		log.Panic("Not enough funds")
+	}
+
+	for id, outs := range ValidOutputs {
+		txnID, err := hex.DecodeString(id)
+		ErrorHandler(err)
+
+		for _, out := range outs {
+			inputs = append(inputs, TxInput{txnID, out, from})
+		}
+	}
+
+	outputs = append(outputs, TxOutput{amount, to})
+	// if enough money the nminus
+	if amount <= accumulated {
+		outputs = append(outputs, TxOutput{accumulated - amount, from})
+	}
+
+	txn := Transaction{nil, inputs, outputs}
+	txn.SetID()
+	
+	return &txn 
 }
 
 func (tx *Transaction) SetID() {
@@ -54,3 +87,10 @@ func (tx *Transaction) IsCoinbase() bool {
 	return len(tx.Inputs) == 1 && len(tx.Inputs[0].ID) == 0 && tx.Inputs[0].OutputIndex == -1
 }
 
+func (in *TxInput) CanUnlock(data string) bool {
+	return in.Signature == data
+}
+
+func (out *TxOutput) CanBeUnlocked(data string) bool {
+	return out.PublicKey == data
+}
