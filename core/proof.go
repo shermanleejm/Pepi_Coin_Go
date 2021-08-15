@@ -9,7 +9,6 @@ import (
 	"math/big"
 )
 
-// TODO: should increment over time
 const Difficulty = 12
 
 type ProofOfWork struct {
@@ -19,18 +18,12 @@ type ProofOfWork struct {
 
 func NewProofOfWork(b *Block) *ProofOfWork {
 	target := big.NewInt(1)
-	target.Lsh(target, uint(256-Difficulty))
+	target.Lsh(target, uint(256-Difficulty)) // locality sensitive hashing to reduce dimentionality of big int
 	pow := &ProofOfWork{b, target}
 	return pow
 }
 
-func ToHex(num int64) []byte {
-	buff := new(bytes.Buffer)
-	ErrorHandler(binary.Write(buff, binary.BigEndian, num))
-	return buff.Bytes()
-}
-
-func (pow *ProofOfWork) Init(nonce int) []byte {
+func (pow *ProofOfWork) CalculateHash(nonce int) []byte {
 	data := bytes.Join([][]byte{
 		pow.Block.PrevHash,
 		pow.Block.HashTransactions(),
@@ -40,36 +33,35 @@ func (pow *ProofOfWork) Init(nonce int) []byte {
 	return data
 }
 
-func (pow *ProofOfWork) Calculate() (int, []byte) {
-	var intHash big.Int
-	var hash [32]byte
-
-	nonce := 0
-
-	for nonce < math.MaxInt64 {
-		data := pow.Init(nonce)
-		hash = sha256.Sum256(data)
-
-		fmt.Printf("\r%x", hash)
-		intHash.SetBytes(hash[:])
-
-		if intHash.Cmp(pow.Target) == -1 {
-			break
-		} else {
-			nonce++
-		}
-	}
-	fmt.Println()
-	return nonce, hash[:]
+func ToHex(num int64) []byte {
+	buffer := new(bytes.Buffer)
+	err := binary.Write(buffer, binary.BigEndian, num)
+	ErrorHandler(err)
+	return buffer.Bytes()
 }
 
 func (pow *ProofOfWork) Validate() bool {
 	var intHash big.Int
+	data := pow.CalculateHash(pow.Block.Nonce)
+	tmp := sha256.Sum256(data)
+	intHash.SetBytes(tmp[:])
+	return intHash.Cmp(pow.Target) == -1 // check if the target is correct
+}
 
-	data := pow.Init(pow.Block.Nonce)
+func (pow *ProofOfWork) Init() (int, []byte) {
+	var intHash big.Int
+	var hash [32]byte
+	nonce := 0
 
-	hash := sha256.Sum256(data)
-	intHash.SetBytes(hash[:])
-
-	return intHash.Cmp(pow.Target) == -1
+	for nonce < math.MaxInt64 {
+		hash = sha256.Sum256(pow.CalculateHash(nonce))
+		fmt.Printf("\r%x", hash)
+		intHash.SetBytes(hash[:])
+		if intHash.Cmp(pow.Target) == -1 {
+			break
+		}
+		nonce++
+	}
+	fmt.Println()
+	return nonce, hash[:]
 }
