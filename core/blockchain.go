@@ -1,6 +1,7 @@
 package core
 
 import (
+	"log"
 	"os"
 
 	"github.com/dgraph-io/badger"
@@ -62,4 +63,33 @@ func NewBlockChain(address, nodeID string) *BlockChain {
 	blockchain := BlockChain{lastHash, db, []*Transaction{}}
 
 	return &blockchain
+}
+
+func (chain *BlockChain) MineBlock(txns []*Transaction) *Block {
+	var lastHash []byte
+	for _, t := range txns {
+		if !t.Verify() {
+			log.Panic("Invalid transaction")
+		}
+	}
+
+	err := chain.Database.View(func(txn *badger.Txn) error {
+		item, err := txn.Get([]byte("lastHash"))
+		ErrorHandler(err)
+		lastHash = GetDBValue(*item)
+		return nil
+	})
+	ErrorHandler(err)
+
+	newBlock := NewBlock(txns, lastHash)
+
+	err = chain.Database.Update(func(txn *badger.Txn) error {
+		ErrorHandler(txn.Set(newBlock.Hash, newBlock.Serialise()))
+		ErrorHandler(txn.Set([]byte("lastHash"), newBlock.Hash))
+		chain.LashHash = newBlock.Hash
+		return nil
+	})
+	ErrorHandler(err)
+
+	return newBlock
 }
