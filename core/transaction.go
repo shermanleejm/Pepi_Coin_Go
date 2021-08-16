@@ -3,10 +3,12 @@ package core
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"encoding/gob"
 	"fmt"
 	"log"
+	"math/big"
 	"time"
 )
 
@@ -40,6 +42,25 @@ func (txn *Transaction) Sign(privateKey ecdsa.PrivateKey) {
 	ErrorHandler(err)
 	signature := append(r.Bytes(), s.Bytes()...)
 	txn.signature = signature
+}
+
+func (txn *Transaction) Verify() bool {
+	data := fmt.Sprintf("%d%x%x%f", txn.timestamp, txn.from, txn.to, txn.amount)
+
+	r := big.Int{}
+	s := big.Int{}
+	sigLen := len(txn.signature)
+	r.SetBytes(txn.signature[:(sigLen / 2)])
+	s.SetBytes(txn.signature[(sigLen / 2):])
+
+	x := big.Int{}
+	y := big.Int{}
+	keyLen := len(txn.from)
+	x.SetBytes(txn.from[:(keyLen / 2)])
+	y.SetBytes(txn.from[(keyLen / 2):])
+	rawPubKey := ecdsa.PublicKey{Curve: elliptic.P256(), X: &x, Y: &y}
+
+	return ecdsa.Verify(&rawPubKey, []byte(data), &r, &s)
 }
 
 func (bc *BlockChain) NewTransaction(wallet *Wallet, to []byte, amount float64) Transaction {

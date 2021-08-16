@@ -28,18 +28,38 @@ func DBExists() bool {
 	return true
 }
 
-// func NewBlockChain(address, nodeID string) *BlockChain {
-// 	var lastHash []byte
-// 	if !DBExists() {
-// 		opts := badger.DefaultOptions(dbPath)
-// 		opts.Dir = dbPath
-// 		opts.ValueDir = dbPath
-// 		opts.Logger = nil
-// 		db, err := badger.Open(opts)
-// 		ErrorHandler(err)
+func NewBlockChain(address, nodeID string) *BlockChain {
+	var lastHash []byte
+	opts := badger.DefaultOptions(dbPath)
+	opts.Dir = dbPath
+	opts.ValueDir = dbPath
+	opts.Logger = nil
+	db, err := badger.Open(opts)
+	ErrorHandler(err)
 
-// 		err = db.Update(func(txn *badger.Txn) error {
-// 			genesis := NewBlock()
-// 		})
-// 	}
-// }
+	if !DBExists() {
+		err = db.Update(func(txn *badger.Txn) error {
+			genesis := NewBlock([]*Transaction{}, nil)
+			ErrorHandler(txn.Set(genesis.Hash, genesis.Serialise()))
+			ErrorHandler(txn.Set([]byte("lastHash"), genesis.Hash))
+			lastHash = genesis.Hash
+			return nil
+		})
+		ErrorHandler(err)
+	} else {
+		err = db.Update(func(txn *badger.Txn) error {
+			item, err := txn.Get([]byte("lastHash"))
+			ErrorHandler(err)
+			err = item.Value(func(val []byte) error {
+				lastHash = append(lastHash, val...)
+				return nil
+			})
+			return err
+		})
+		ErrorHandler(err)
+	}
+
+	blockchain := BlockChain{lastHash, db, []*Transaction{}}
+
+	return &blockchain
+}
