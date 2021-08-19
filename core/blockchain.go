@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"os"
@@ -20,9 +21,29 @@ type BlockChain struct {
 	pending  []*Transaction
 }
 
+func theOneAboveAll() []byte {
+	return []byte("toaa")
+}
+
 // TODO: traverse the blockchain and calculate the  address's available balance
-func (bc *BlockChain) GetAvailableBalance() float64 {
-	return 100.00
+func (bc *BlockChain) GetAvailableBalance(address []byte) float64 {
+	iter := bc.Iterator()
+	block := iter.Next()
+	res := 0
+	for block.PrevHash != nil {
+		txnLength := len(block.Transactions)
+		var tmp Transaction
+		for i := 0; i < txnLength; i++ {
+			tmp = *block.Transactions[i]
+			if bytes.Equal(tmp.From, address) {
+				res -= int(tmp.Amount)
+			}
+			if bytes.Equal(tmp.To, address) {
+				res += int(tmp.Amount)
+			}
+		}
+	}
+	return float64(res)
 }
 
 func DBExists() bool {
@@ -43,7 +64,7 @@ func NewBlockChain() *BlockChain {
 		db, err := badger.Open(opts)
 		ErrorHandler(err)
 		err = db.Update(func(txn *badger.Txn) error {
-			genesis := NewBlock([]*Transaction{RewardTransaction([]byte("toaa"), 0)}, nil)
+			genesis := NewBlock([]*Transaction{RewardTransaction(theOneAboveAll(), 0)}, nil)
 			ErrorHandler(txn.Set(genesis.Hash, genesis.Serialise()))
 			ErrorHandler(txn.Set([]byte("lastHash"), genesis.Hash))
 			lastHash = genesis.Hash
@@ -68,7 +89,12 @@ func NewBlockChain() *BlockChain {
 		})
 		ErrorHandler(err)
 
-		blockchain := BlockChain{lastHash, db, []*Transaction{}}
+		freeMoney := Transaction{time.Now().Unix(), theOneAboveAll(), theOneAboveAll(), 0, nil}
+		var freeMonies []*Transaction
+		for i := 0; i < 7; i++ {
+			freeMonies = append(freeMonies, &freeMoney)
+		}
+		blockchain := BlockChain{lastHash, db, freeMonies}
 
 		return &blockchain
 	}
@@ -76,7 +102,7 @@ func NewBlockChain() *BlockChain {
 
 func (chain *BlockChain) MineBlock(address []byte) *Block {
 	var lastHash []byte
-	reward := Transaction{time.Now().Unix(), []byte("toaa"), address, reward, nil}
+	reward := Transaction{time.Now().Unix(), theOneAboveAll(), address, reward, nil}
 	chain.pending = append(chain.pending, &reward)
 
 	for _, t := range chain.pending {
@@ -132,7 +158,7 @@ func (iter *BlockChainIterator) Next() *Block {
 }
 
 func (bc *BlockChain) NewTransaction(wallet *Wallet, to []byte, amount float64) {
-	available := bc.GetAvailableBalance()
+	available := bc.GetAvailableBalance(wallet.PublicKey)
 
 	if available < amount {
 		log.Panic("Not enough funds")
