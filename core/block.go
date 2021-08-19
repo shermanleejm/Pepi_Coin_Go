@@ -3,6 +3,7 @@ package core
 import (
 	"bytes"
 	"encoding/gob"
+	"fmt"
 	"time"
 )
 
@@ -28,7 +29,8 @@ func NewBlock(txns []*Transaction, prevHash []byte) *Block {
 	pow := NewProofOfWork(block)
 	nonce, hash := pow.Init()
 	block.Nonce = nonce
-	block.Hash = hash
+	block.Hash = hash[:]
+	fmt.Println(block.Transactions[0], "NEW BLOCK <<<<<<<<")
 	return block
 }
 

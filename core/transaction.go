@@ -7,7 +7,6 @@ import (
 	"crypto/rand"
 	"encoding/gob"
 	"fmt"
-	"log"
 	"math/big"
 	"time"
 )
@@ -16,28 +15,38 @@ type Transaction struct {
 	timestamp int64
 	from      []byte
 	to        []byte
-	amount    float64
+	Amount    float64
 	signature []byte
 }
 
-func (txn *Transaction) Serialise() []byte {
+type encodableTransaction struct {
+	Timestamp int64
+	From      []byte
+	To        []byte
+	Amount    float64
+	Signature []byte
+}
+
+func (txn Transaction) Serialise() []byte {
+	tmp := encodableTransaction{txn.timestamp, txn.from, txn.to, txn.Amount, txn.signature}
 	var encoded bytes.Buffer
 	encoder := gob.NewEncoder(&encoded)
-	err := encoder.Encode(txn)
+	err := encoder.Encode(tmp)
 	ErrorHandler(err)
 	return encoded.Bytes()
 }
 
 func DeserialiseTransaction(data []byte) Transaction {
-	var txn Transaction
+	var tmp encodableTransaction
 	decoder := gob.NewDecoder(bytes.NewReader(data))
-	err := decoder.Decode(&txn)
+	err := decoder.Decode(&tmp)
 	ErrorHandler(err)
+	txn := Transaction{tmp.Timestamp, tmp.From, tmp.To, tmp.Amount, tmp.Signature}
 	return txn
 }
 
 func (txn *Transaction) Sign(privateKey ecdsa.PrivateKey) {
-	data := fmt.Sprintf("%d%x%x%f", txn.timestamp, txn.from, txn.to, txn.amount)
+	data := fmt.Sprintf("%d%x%x%f", txn.timestamp, txn.from, txn.to, txn.Amount)
 	r, s, err := ecdsa.Sign(rand.Reader, &privateKey, []byte(data))
 	ErrorHandler(err)
 	signature := append(r.Bytes(), s.Bytes()...)
@@ -45,7 +54,7 @@ func (txn *Transaction) Sign(privateKey ecdsa.PrivateKey) {
 }
 
 func (txn *Transaction) Verify() bool {
-	data := fmt.Sprintf("%d%x%x%f", txn.timestamp, txn.from, txn.to, txn.amount)
+	data := fmt.Sprintf("%d%x%x%f", txn.timestamp, txn.from, txn.to, txn.Amount)
 
 	r := big.Int{}
 	s := big.Int{}
@@ -63,14 +72,11 @@ func (txn *Transaction) Verify() bool {
 	return ecdsa.Verify(&rawPubKey, []byte(data), &r, &s)
 }
 
-func (bc *BlockChain) NewTransaction(wallet *Wallet, to []byte, amount float64) Transaction {
-	available := bc.GetAvailableBalance()
-
-	if amount < available {
-		log.Panic("Not enough funds")
-	}
-
-	txn := Transaction{time.Now().Unix(), wallet.PublicKey, to, amount, nil}
-	txn.Sign(wallet.PrivateKey)
-	return txn
+func (txn *Transaction) IsReward() bool {
+	return bytes.Equal(txn.from, []byte("toaa")) && txn.signature == nil
 }
+
+func RewardTransaction(to []byte, reward float64) *Transaction {
+	return &Transaction{time.Now().Unix(), []byte("toaa"), to, reward, nil}
+}
+
