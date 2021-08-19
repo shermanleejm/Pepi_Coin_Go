@@ -30,7 +30,7 @@ func NewBlock(txns []*Transaction, prevHash []byte) *Block {
 	nonce, hash := pow.Init()
 	block.Nonce = nonce
 	block.Hash = hash[:]
-	fmt.Println(block.Transactions[0], "NEW BLOCK <<<<<<<<")
+	fmt.Println(block.Transactions[0], "NEW Transactions <<<<<<<<")
 	return block
 }
 

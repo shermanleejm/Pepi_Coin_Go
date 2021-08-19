@@ -12,14 +12,6 @@ import (
 )
 
 type Transaction struct {
-	timestamp int64
-	from      []byte
-	to        []byte
-	Amount    float64
-	signature []byte
-}
-
-type encodableTransaction struct {
 	Timestamp int64
 	From      []byte
 	To        []byte
@@ -28,52 +20,50 @@ type encodableTransaction struct {
 }
 
 func (txn Transaction) Serialise() []byte {
-	tmp := encodableTransaction{txn.timestamp, txn.from, txn.to, txn.Amount, txn.signature}
 	var encoded bytes.Buffer
 	encoder := gob.NewEncoder(&encoded)
-	err := encoder.Encode(tmp)
+	err := encoder.Encode(txn)
 	ErrorHandler(err)
 	return encoded.Bytes()
 }
 
 func DeserialiseTransaction(data []byte) Transaction {
-	var tmp encodableTransaction
+	var tmp Transaction
 	decoder := gob.NewDecoder(bytes.NewReader(data))
 	err := decoder.Decode(&tmp)
 	ErrorHandler(err)
-	txn := Transaction{tmp.Timestamp, tmp.From, tmp.To, tmp.Amount, tmp.Signature}
-	return txn
+	return tmp
 }
 
 func (txn *Transaction) Sign(privateKey ecdsa.PrivateKey) {
-	data := fmt.Sprintf("%d%x%x%f", txn.timestamp, txn.from, txn.to, txn.Amount)
+	data := fmt.Sprintf("%d%x%x%f", txn.Timestamp, txn.From, txn.To, txn.Amount)
 	r, s, err := ecdsa.Sign(rand.Reader, &privateKey, []byte(data))
 	ErrorHandler(err)
 	signature := append(r.Bytes(), s.Bytes()...)
-	txn.signature = signature
+	txn.Signature = signature
 }
 
 func (txn *Transaction) Verify() bool {
-	data := fmt.Sprintf("%d%x%x%f", txn.timestamp, txn.from, txn.to, txn.Amount)
+	data := fmt.Sprintf("%d%x%x%f", txn.Timestamp, txn.From, txn.To, txn.Amount)
 
 	r := big.Int{}
 	s := big.Int{}
-	sigLen := len(txn.signature)
-	r.SetBytes(txn.signature[:(sigLen / 2)])
-	s.SetBytes(txn.signature[(sigLen / 2):])
+	sigLen := len(txn.Signature)
+	r.SetBytes(txn.Signature[:(sigLen / 2)])
+	s.SetBytes(txn.Signature[(sigLen / 2):])
 
 	x := big.Int{}
 	y := big.Int{}
-	keyLen := len(txn.from)
-	x.SetBytes(txn.from[:(keyLen / 2)])
-	y.SetBytes(txn.from[(keyLen / 2):])
+	keyLen := len(txn.From)
+	x.SetBytes(txn.From[:(keyLen / 2)])
+	y.SetBytes(txn.From[(keyLen / 2):])
 	rawPubKey := ecdsa.PublicKey{Curve: elliptic.P256(), X: &x, Y: &y}
 
 	return ecdsa.Verify(&rawPubKey, []byte(data), &r, &s)
 }
 
 func (txn *Transaction) IsReward() bool {
-	return bytes.Equal(txn.from, []byte("toaa")) && txn.signature == nil
+	return bytes.Equal(txn.From, []byte("toaa")) && txn.Signature == nil
 }
 
 func RewardTransaction(to []byte, reward float64) *Transaction {

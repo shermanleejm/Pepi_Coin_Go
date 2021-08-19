@@ -22,7 +22,7 @@ func main() {
 	// var verificationData = append(testData[:], 69)
 	iter := chain.Iterator()
 	block := iter.Next()
-	for block != nil {
+	for block.PrevHash != nil {
 		for _, txn := range block.Transactions {
 			fmt.Println(txn)
 		}
