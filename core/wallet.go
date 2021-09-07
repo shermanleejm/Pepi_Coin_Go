@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/pem"
+	"os"
 )
 
 func NewKeyPair() (ecdsa.PrivateKey, []byte) {
@@ -27,25 +28,33 @@ func NewWallet() *Wallet {
 	return &wallet
 }
 
-func EncodeWalletKeys(privateKey *ecdsa.PrivateKey, publicKey *ecdsa.PublicKey) (string, string) {
-	x509Encoded, _ := x509.MarshalECPrivateKey(privateKey)
+func (w *Wallet) EncodeWalletKeys() {
+	x509Encoded, _ := x509.MarshalECPrivateKey(&w.PrivateKey)
 	pemEncoded := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: x509Encoded})
 
-	x509EncodedPub, _ := x509.MarshalPKIXPublicKey(publicKey)
+	x509EncodedPub, _ := x509.MarshalPKIXPublicKey(&w.PrivateKey.PublicKey)
 	pemEncodedPub := pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: x509EncodedPub})
 
-	return string(pemEncoded), string(pemEncodedPub)
+	f, err := os.OpenFile("private.pem", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
+	ErrorHandler(err)
+	f.WriteString(string(pemEncoded))
+
+	f, err = os.OpenFile("public.pem", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
+	ErrorHandler(err)
+	f.WriteString(string(pemEncodedPub))
 }
 
-func DecodeWalletKeys(pemEncoded string, pemEncodedPub string) (*ecdsa.PrivateKey, *ecdsa.PublicKey) {
+func DecodeWalletKeys(pemEncoded string, pemEncodedPub string) Wallet {
 	block, _ := pem.Decode([]byte(pemEncoded))
 	x509Encoded := block.Bytes
 	privateKey, _ := x509.ParseECPrivateKey(x509Encoded)
 
 	blockPub, _ := pem.Decode([]byte(pemEncodedPub))
 	x509EncodedPub := blockPub.Bytes
-	genericPublicKey, _ := x509.ParsePKIXPublicKey(x509EncodedPub)
-	publicKey := genericPublicKey.(*ecdsa.PublicKey)
+	// genericPublicKey, _ := x509.ParsePKIXPublicKey(x509EncodedPub)
+	// publicKey := genericPublicKey.(*ecdsa.PublicKey)
 
-	return privateKey, publicKey
+	wallet := Wallet{PrivateKey: *privateKey, PublicKey: x509EncodedPub}
+
+	return wallet
 }
